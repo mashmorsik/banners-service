@@ -3,6 +3,7 @@ package config
 import (
 	errs "github.com/pkg/errors"
 	"github.com/spf13/viper"
+	"time"
 )
 
 type Config struct {
@@ -13,6 +14,10 @@ type Config struct {
 	Server struct {
 		Port string `yaml:"port"`
 	} `yaml:"server"`
+	Cache struct {
+		EvictionWorkerDuration time.Duration `yaml:"evictionWorkerDuration"`
+		BannerExpiration       time.Duration `yaml:"bannerExpiration"`
+	} `yaml:"cache"`
 }
 
 func LoadConfig() (*Config, error) {

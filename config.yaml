@@ -4,3 +4,7 @@ postgres:
 
 server:
   port: :8080
+
+cache:
+  evictionWorkerDuration: 1s
+  bannerExpiration: 5m

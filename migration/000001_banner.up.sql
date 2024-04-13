@@ -15,35 +15,31 @@ create table if not exists public.banner
     id serial primary key,
     created_at timestamp with time zone not null,
     updated_at timestamp with time zone not null,
-    tag_ids integer[] not null,
-    feature_id integer not null,
     is_active bool not null,
-    version integer not null,
-    constraint fk_feature_id foreign key (feature_id) references public.feature (id),
-    constraint fk_tag_ids foreign key (tag_ids) references public.tag (id)
-);
+    last_version integer not null,
+    active_version integer not null
+    );
 
-create table if not exists public.banner_version
+create table if not exists public.banner_content
 (
     id serial primary key,
     banner_id integer not null,
     version integer not null,
     content jsonb not null,
     updated_at timestamp with time zone not null,
-    is_acrive bool not null,
-    constraint fk_banner_id foreign key (banner_id) references public.banner (id) on delete cascade
+    constraint fk_banner foreign key (banner_id) references public.banner (id) on delete cascade
+    );
+
+create table if not exists public.banner_feature_tag
+(
+    id serial primary key,
+    banner_id integer references banner(id) on delete cascade,
+    feature_id integer references feature(id),
+    tag_id integer references tag(id),
+    version integer not null,
+    updated_at timestamp with time zone not null
 );
 
-insert into public.banner (is_active, time_created)
-select true, NOW()
-FROM generate_series(1, 100);
 
-INSERT INTO public.tag (name)
-SELECT 'test_tag_' || i
-FROM generate_series(1, 100) AS s(i);
-
-INSERT INTO public.feature (name)
-SELECT 'test_feature_' || i
-FROM generate_series(1, 100) AS s(i);
 
 

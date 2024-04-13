@@ -40,8 +40,8 @@ func (s *HTTPServer) StartServer(ctx context.Context) error {
 	router.HandleFunc("/user_banner", s.GetUserBanner).Methods(http.MethodGet)
 	router.HandleFunc("/banner", s.GetAdminBanner).Methods(http.MethodGet)
 	router.HandleFunc("/banner", s.CreateBanner).Methods(http.MethodPost)
-	router.HandleFunc("/banner", s.UpdateBanner).Methods(http.MethodPatch)
-	router.HandleFunc("/banner", s.DeleteBanner).Methods(http.MethodDelete)
+	router.HandleFunc("/banner/{id}", s.UpdateBanner).Methods(http.MethodPatch)
+	router.HandleFunc("/banner/{id}", s.DeleteBanner).Methods(http.MethodDelete)
 
 	logger.Infof("HTTPServer is listening on port: %s\n", s.Config.Server.Port)
 
@@ -91,13 +91,13 @@ func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqBanner := &models.Banner{
-		TagID:     tagID,
+		TagIDs:    append([]int{}, tagID),
 		FeatureID: featureID,
 		IsActive:  true,
 		Latest:    useLatest,
 	}
 
-	var respBanner *models.Banner
+	var respBanner *models.Content
 	if useLatest {
 		respBanner, err = s.Banners.GetForUserLatest(reqBanner)
 		if err != nil {
@@ -110,7 +110,21 @@ func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.SendRespBanner(w, respBanner)
+	jsonData, err := json.Marshal(respBanner)
+	if err != nil {
+		logger.Errf("failed to marshal JSON: %v", err)
+		http.Error(w, "Failed to marshal JSON", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	_, err = w.Write(jsonData)
+	if err != nil {
+		logger.Errf("failed to write response: %v", err)
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
@@ -129,6 +143,16 @@ func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 	}
 	// TODO featureID validation
 
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil {
+		http.Error(w, "invalid limit", http.StatusBadRequest)
+	}
+
+	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil {
+		http.Error(w, "invalid offset", http.StatusBadRequest)
+	}
+
 	useLatest := false
 	lastRevision := r.URL.Query().Get("use_last_revision")
 	if lastRevision != "" {
@@ -136,41 +160,18 @@ func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqBanner := &models.Banner{
-		TagID:     tagID,
+		TagIDs:    append([]int{}, tagID),
 		FeatureID: featureID,
 		IsActive:  true,
 		Latest:    useLatest,
 	}
 
-	var respBanner *models.Banner
-	if useLatest {
-		respBanner, err = s.Banners.GetForUserLatest(reqBanner)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
-	} else {
-		respBanner, err = s.Banners.GetForUser(reqBanner)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
+	var respBanner []*models.Banner
+	respBanner, err = s.Banners.GetForAdmin(reqBanner, limit, offset)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	s.SendRespBanner(w, respBanner)
-}
-
-func (s *HTTPServer) CreateBanner(w http.ResponseWriter, r *http.Request) {
-
-}
-
-func (s *HTTPServer) UpdateBanner(w http.ResponseWriter, r *http.Request) {
-
-}
-
-func (s *HTTPServer) DeleteBanner(w http.ResponseWriter, r *http.Request) {
-
-}
-
-func (s *HTTPServer) SendRespBanner(w http.ResponseWriter, respBanner *models.Banner) {
 	jsonData, err := json.Marshal(respBanner)
 	if err != nil {
 		logger.Errf("failed to marshal JSON: %v", err)
@@ -186,4 +187,69 @@ func (s *HTTPServer) SendRespBanner(w http.ResponseWriter, respBanner *models.Ba
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		return
 	}
+}
+
+func (s *HTTPServer) CreateBanner(w http.ResponseWriter, r *http.Request) {
+	_ = r.Header.Get("Authorization")
+	// TODO token validation
+
+	var b *models.Banner
+	err := json.NewDecoder(r.Body).Decode(&b)
+	if err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
+		return
+	}
+
+	err = s.Banners.Create(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (s *HTTPServer) UpdateBanner(w http.ResponseWriter, r *http.Request) {
+	_ = r.Header.Get("Authorization")
+	// TODO token validation
+
+	var b *models.Banner
+	err := json.NewDecoder(r.Body).Decode(&b)
+	if err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
+		return
+	}
+
+	params := mux.Vars(r)
+	bannerIDStr := params["id"]
+
+	b.ID, err = strconv.Atoi(bannerIDStr)
+	if err != nil {
+		http.Error(w, "invalid bannerID", http.StatusBadRequest)
+	}
+
+	err = s.Banners.Update(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+}
+
+func (s *HTTPServer) DeleteBanner(w http.ResponseWriter, r *http.Request) {
+	_ = r.Header.Get("Authorization")
+	// TODO token validation
+
+	params := mux.Vars(r)
+	bannerIDStr := params["id"]
+
+	bannerID, err := strconv.Atoi(bannerIDStr)
+	if err != nil {
+		http.Error(w, "invalid bannerID", http.StatusBadRequest)
+	}
+	// TODO tagID validation
+
+	err = s.Banners.Delete(bannerID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
