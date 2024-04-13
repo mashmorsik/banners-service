@@ -7,6 +7,7 @@ import (
 	"github.com/mashmorsik/banners-service/infrastructure/data/cache"
 	"github.com/mashmorsik/banners-service/infrastructure/server"
 	"github.com/mashmorsik/banners-service/internal/banner"
+	"github.com/mashmorsik/banners-service/pkg/token"
 	"github.com/mashmorsik/banners-service/repository"
 	"github.com/mashmorsik/logger"
 	"os"
@@ -42,6 +43,8 @@ func main() {
 
 	bannerRepo := repository.NewBannerRepo(ctx, dat)
 	bb := banner.NewBanner(ctx, bannerRepo, conf, &bannerCache)
+
+	token.NewTokenManager(conf.Auth.TokenSecret)
 
 	httpServer := server.NewServer(conf, *bb)
 	if err = httpServer.StartServer(ctx); err != nil {

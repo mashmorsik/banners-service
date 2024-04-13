@@ -9,11 +9,13 @@ import (
 	"github.com/mashmorsik/banners-service/internal/banner"
 	mw "github.com/mashmorsik/banners-service/pkg/middleware"
 	"github.com/mashmorsik/banners-service/pkg/models"
+	"github.com/mashmorsik/banners-service/pkg/token"
 	"github.com/mashmorsik/logger"
 	"github.com/pkg/errors"
 	"github.com/rs/cors"
 	"golang.org/x/sync/errgroup"
 	"net/http"
+	"slices"
 	"strconv"
 )
 
@@ -42,6 +44,7 @@ func (s *HTTPServer) StartServer(ctx context.Context) error {
 	router.HandleFunc("/banner", s.CreateBanner).Methods(http.MethodPost)
 	router.HandleFunc("/banner/{id}", s.UpdateBanner).Methods(http.MethodPatch)
 	router.HandleFunc("/banner/{id}", s.DeleteBanner).Methods(http.MethodDelete)
+	router.HandleFunc("/token", s.MakeToken).Methods(http.MethodGet)
 
 	logger.Infof("HTTPServer is listening on port: %s\n", s.Config.Server.Port)
 
@@ -252,4 +255,29 @@ func (s *HTTPServer) DeleteBanner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *HTTPServer) MakeToken(w http.ResponseWriter, r *http.Request) {
+	role := r.URL.Query().Get("role")
+	if role == "" || !slices.Contains([]token.Role{token.RoleAdmin, token.RoleUser}, token.Role(role)) {
+		http.Error(w, "invalid role", http.StatusBadRequest)
+		return
+	}
+
+	sign, err := token.Create(token.Role(role))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.writeResponse(w, []byte(sign))
+}
+
+func (s *HTTPServer) writeResponse(w http.ResponseWriter, response []byte) {
+	_, err := w.Write(response)
+	if err != nil {
+		logger.Errf("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
 }

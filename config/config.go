@@ -18,6 +18,9 @@ type Config struct {
 		EvictionWorkerDuration time.Duration `yaml:"evictionWorkerDuration"`
 		BannerExpiration       time.Duration `yaml:"bannerExpiration"`
 	} `yaml:"cache"`
+	Auth struct {
+		TokenSecret string `yaml:"tokenSecret"`
+	} `yaml:"auth"`
 }
 
 func LoadConfig() (*Config, error) {

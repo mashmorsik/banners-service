@@ -8,3 +8,6 @@ server:
 cache:
   evictionWorkerDuration: 1s
   bannerExpiration: 5m
+
+auth:
+  tokenSecret: "cR61rKnrDiST2Q8zr86TUdE2wnqDW1Zyq0thrZi63dy2pyDFafDgyUaZp248"
