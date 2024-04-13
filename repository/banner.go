@@ -49,53 +49,73 @@ func (br *BannerRepo) GetForUser(b *models.Banner) (*models.Content, error) {
 }
 
 func (br *BannerRepo) GetForAdmin(b *models.Banner, limit, offset int) ([]*models.Banner, error) {
-	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
-	defer cancel()
+	var banners []*models.Banner
 
-	query := `
-        SELECT b.id, b.created_at, b.updated_at, array_agg(bt.tag_id) AS tag_ids, b.feature_id, b.is_active, bv.content
-        FROM banner b
+	tagID := b.TagIDs[0]
+	featureID := b.FeatureID
+
+	var queryLimit, queryOffset interface{}
+	if limit != 0 {
+		queryLimit = limit
+	}
+	if offset != 0 {
+		queryOffset = offset
+	}
+
+	rows, err := br.data.Master().QueryContext(br.Ctx, `
+        SELECT
+            b.id,
+            b.created_at,
+            b.updated_at,
+            array_agg(bft.tag_id) AS tag_ids,
+            bft.feature_id,
+            b.is_active,
+            bc.content,
+            bc.version
+        FROM
+            banner b
         JOIN
-            (
-                SELECT banner_id, MAX(version) AS max_version
-                FROM banner_version
-                GROUP BY banner_id
-            ) AS latest_version ON b.id = latest_version.banner_id
-        JOIN banner_version bv ON b.id = bv.banner_id AND latest_version.max_version = bv.version
-        LEFT JOIN banner_tag bt ON b.id = bt.banner_id
+            banner_content bc ON b.id = bc.banner_id
+        JOIN
+            banner_feature_tag bft ON b.id = bft.banner_id
         WHERE
-            ($1::int[] IS NULL OR bt.tag_id = ANY($1))
-            AND ($2::int = 0 OR b.feature_id = $2)
-        GROUP BY b.id, b.created_at, b.updated_at, b.feature_id, b.is_active, bv.content
-        LIMIT $3 OFFSET $4
-    `
-
-	rows, err := br.data.Master().QueryContext(ctx, query, pq.Array(b.TagIDs), b.FeatureID, limit, offset)
+            (bft.feature_id = $1 OR $1 IS NULL)
+            AND (bft.tag_id = $2 OR $2 IS NULL)
+        GROUP BY
+            b.id,
+            b.created_at,
+            b.updated_at,
+            bft.feature_id,
+            b.is_active,
+            bc.content,
+            bc.version
+        ORDER BY
+            b.id
+        LIMIT $3 OFFSET $4;
+    `, featureID, tagID, queryLimit, queryOffset)
 	if err != nil {
 		return nil, err
 	}
 	defer func(rows *sql.Rows) {
 		err = rows.Close()
 		if err != nil {
-			logger.Errf("failed to close rows, err: %v", err)
 			return
 		}
 	}(rows)
 
-	var banners []*models.Banner
 	for rows.Next() {
 		var banner models.Banner
 		var contentJSON []byte
-		if err = rows.Scan(&banner.ID, &banner.CreatedAt, &banner.UpdatedAt, &banner.TagIDs, &banner.FeatureID, &banner.IsActive, &contentJSON); err != nil {
-			return nil, errs.WithMessagef(err, "failed to scan rows")
+		if err = rows.Scan(&banner.ID, &banner.CreatedAt, &banner.UpdatedAt, pq.Array(&banner.TagIDs), &banner.FeatureID, &banner.IsActive, &contentJSON, &banner.Version); err != nil {
+			return nil, err
 		}
 		if err = json.Unmarshal(contentJSON, &banner.Content); err != nil {
-			return nil, errs.WithMessagef(err, "failed to unmarshal content JSON")
+			return nil, err
 		}
 		banners = append(banners, &banner)
 	}
 	if err = rows.Err(); err != nil {
-		return nil, errs.WithMessagef(err, "failed to fetch rows")
+		return nil, err
 	}
 
 	return banners, nil
@@ -273,6 +293,75 @@ func (br *BannerRepo) GetLastVersion(tx *sql.Tx, b *models.Banner) (error, int) 
 	return nil, lastVersion
 }
 
+func (br *BannerRepo) MergeUpdateVersion(tx *sql.Tx, b *models.Banner, lastVersion int) (*models.Banner, error) {
+	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
+	defer cancel()
+
+	var contentJSON []byte
+	var featureID int
+	err := tx.QueryRowContext(ctx,
+		`SELECT bc.content, bft.feature_id
+		FROM banner b 
+		JOIN banner_content bc on b.id = bc.banner_id
+		JOIN banner_feature_tag bft on bc.banner_id = bft.banner_id
+		WHERE b.id = $1 
+		AND bc.version = $2
+		AND bft.version = $3`, b.ID, lastVersion, lastVersion).Scan(&contentJSON, &featureID)
+	if err != nil {
+		return nil, errs.WithMessagef(err, "fail to get old version for banner %d", b.ID)
+	}
+
+	var oldContent models.Content
+	err = json.Unmarshal(contentJSON, &oldContent)
+	if err != nil {
+		return nil, errs.WithMessagef(err, "fail to unmarshal old content for banner %d", b.ID)
+	}
+
+	var oldTags []int
+	rows, err := tx.QueryContext(ctx,
+		`SELECT bft.tag_id
+		FROM banner b 
+		JOIN banner_content bc ON b.id = bc.banner_id
+		JOIN banner_feature_tag bft ON bc.banner_id = bft.banner_id
+		WHERE b.id = $1
+		AND bft.version = $2`, b.ID, lastVersion)
+	if err != nil {
+		return nil, errs.WithMessagef(err, "failed to get old version for banner %d", b.ID)
+	}
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			return
+		}
+	}(rows)
+
+	for rows.Next() {
+		var tagID int
+		if err = rows.Scan(&tagID); err != nil {
+			return nil, errs.WithMessagef(err, "failed to scan tag ID")
+		}
+		oldTags = append(oldTags, tagID)
+	}
+
+	if b.Content.Text == "" {
+		b.Content.Text = oldContent.Text
+	}
+	if b.Content.Title == "" {
+		b.Content.Title = oldContent.Title
+	}
+	if b.Content.URL == "" {
+		b.Content.URL = oldContent.URL
+	}
+	if b.FeatureID == 0 {
+		b.FeatureID = featureID
+	}
+	if b.TagIDs == nil {
+		b.TagIDs = oldTags
+	}
+
+	return b, nil
+}
+
 func (br *BannerRepo) Update(b *models.Banner) error {
 	b.UpdatedAt = time.Now()
 
@@ -292,6 +381,11 @@ func (br *BannerRepo) Update(b *models.Banner) error {
 		return errs.WithMessagef(err, "fail to get last version of banner %d", b.ID)
 	}
 	b.Version = lastVersion + 1
+
+	b, err = br.MergeUpdateVersion(tx, b, lastVersion)
+	if err != nil {
+		return errs.WithMessagef(err, "fail to merge update banner %d", b.ID)
+	}
 
 	err = br.UpdateBanner(tx, b, lastVersion)
 	if err != nil {

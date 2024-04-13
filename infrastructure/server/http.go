@@ -134,43 +134,62 @@ func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 	_ = r.Header.Get("Authorization")
 	// TODO token validation
 
-	tagID, err := strconv.Atoi(r.URL.Query().Get("tag_id"))
-	if err != nil {
-		http.Error(w, "invalid tagID", http.StatusBadRequest)
-	}
-	// TODO tagID validation
-
-	featureID, err := strconv.Atoi(r.URL.Query().Get("feature_id"))
-	if err != nil {
-		http.Error(w, "invalid featureID", http.StatusBadRequest)
-	}
-	// TODO featureID validation
-
-	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil {
-		http.Error(w, "invalid limit", http.StatusBadRequest)
+	var tagID int
+	tagIDStr := r.URL.Query().Get("tag_id")
+	if tagIDStr != "" {
+		var err error
+		tagID, err = strconv.Atoi(tagIDStr)
+		if err != nil {
+			http.Error(w, "invalid tagID", http.StatusBadRequest)
+			return
+		}
 	}
 
-	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
-	if err != nil {
-		http.Error(w, "invalid offset", http.StatusBadRequest)
+	var featureID int
+	featureIDStr := r.URL.Query().Get("feature_id")
+	if tagIDStr != "" {
+		var err error
+		featureID, err = strconv.Atoi(featureIDStr)
+		if err != nil {
+			http.Error(w, "invalid featureID", http.StatusBadRequest)
+			return
+		}
 	}
 
-	useLatest := false
-	lastRevision := r.URL.Query().Get("use_last_revision")
-	if lastRevision != "" {
-		useLatest = true
+	var limit int
+	limitStr := r.URL.Query().Get("limit")
+	if limitStr != "" {
+		var err error
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil {
+			http.Error(w, "invalid limit", http.StatusBadRequest)
+			return
+		}
+	} else {
+		limit = 0
+	}
+
+	var offset int
+	offsetStr := r.URL.Query().Get("offset")
+	if limitStr != "" {
+		var err error
+		offset, err = strconv.Atoi(offsetStr)
+		if err != nil {
+			http.Error(w, "invalid limit", http.StatusBadRequest)
+			return
+		}
+	} else {
+		offset = 0
 	}
 
 	reqBanner := &models.Banner{
 		TagIDs:    append([]int{}, tagID),
 		FeatureID: featureID,
 		IsActive:  true,
-		Latest:    useLatest,
 	}
 
 	var respBanner []*models.Banner
-	respBanner, err = s.Banners.GetForAdmin(reqBanner, limit, offset)
+	respBanner, err := s.Banners.GetForAdmin(reqBanner, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}

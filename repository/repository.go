@@ -12,6 +12,7 @@ type Repository interface {
 	CreateContent(tx *sql.Tx, b *models.Banner) error
 	CreateFeatureTags(tx *sql.Tx, b *models.Banner) error
 	Create(b *models.Banner) error
+	MergeUpdateVersion(tx *sql.Tx, b *models.Banner, lastVersion int) (*models.Banner, error)
 	UpdateBanner(tx *sql.Tx, b *models.Banner, lastVersion int) error
 	UpdateFeatureTag(tx *sql.Tx, b *models.Banner) error
 	UpdateBannerContent(tx *sql.Tx, b *models.Banner) error
