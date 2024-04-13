@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/banners-service/infrastructure/data"
 	"github.com/mashmorsik/banners-service/infrastructure/data/cache"
@@ -10,9 +14,6 @@ import (
 	"github.com/mashmorsik/banners-service/pkg/token"
 	"github.com/mashmorsik/banners-service/repository"
 	"github.com/mashmorsik/logger"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 func main() {
