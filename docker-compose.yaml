@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16.2-alpine3.19
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    networks: ["mynetwork"]
+    healthcheck:
+      test: [ "CMD", "pg_isready", "--username=postgres" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+#  myapp:
+#    build: .
+#    ports:
+#      - "8080:8080"
+#      - "8082:8082"
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#    networks: ["mynetwork"]
+#    command: ./wait-for-postgres.sh postgres ./app
+
+networks:
+  mynetwork:
+    name: mynetwork

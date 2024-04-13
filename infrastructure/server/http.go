@@ -3,8 +3,14 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"slices"
+	"strconv"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-openapi/runtime/middleware"
-	"github.com/gorilla/mux"
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/banners-service/internal/banner"
 	mw "github.com/mashmorsik/banners-service/pkg/middleware"
@@ -14,9 +20,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/cors"
 	"golang.org/x/sync/errgroup"
-	"net/http"
-	"slices"
-	"strconv"
 )
 
 type HTTPServer struct {
@@ -30,29 +33,26 @@ func NewServer(conf *config.Config, banners banner.Banner) *HTTPServer {
 
 func (s *HTTPServer) StartServer(ctx context.Context) error {
 
-	router := mux.NewRouter()
-
-	router.Handle("/swagger.yaml", http.FileServer(http.Dir("./")))
-	sh := middleware.SwaggerUI(middleware.SwaggerUIOpts{
-		Path:    "/swagger",
-		SpecURL: "swagger.yaml",
-	}, nil)
-	router.Handle("/swagger", sh)
-
-	router.HandleFunc("/user_banner", s.GetUserBanner).Methods(http.MethodGet)
-	router.HandleFunc("/banner", s.GetAdminBanner).Methods(http.MethodGet)
-	router.HandleFunc("/banner", s.CreateBanner).Methods(http.MethodPost)
-	router.HandleFunc("/banner/{id}", s.UpdateBanner).Methods(http.MethodPatch)
-	router.HandleFunc("/banner/{id}", s.DeleteBanner).Methods(http.MethodDelete)
-	router.HandleFunc("/token", s.MakeToken).Methods(http.MethodGet)
+	r := chi.NewRouter()
+	r.Use(mw.LoggingMiddleware)
+	r.Use(chimw.Timeout(20 * time.Second))
+	r.Use(chimw.Recoverer)
 
 	logger.Infof("HTTPServer is listening on port: %s\n", s.Config.Server.Port)
+	r.Get("/token", s.MakeToken)
+	r.Mount("/banner", s.adminRouter())
+	r.Mount("/user_banner", s.userRouter())
 
-	router.Use(mw.LoggingMiddleware)
+	r.Handle("/swagger.yaml", http.FileServer(http.Dir("./")))
+
+	r.Handle("/swagger", middleware.SwaggerUI(middleware.SwaggerUIOpts{
+		Path:    "/swagger",
+		SpecURL: "swagger.yaml",
+	}, nil))
 
 	httpServer := &http.Server{
 		Addr:    s.Config.Server.Port,
-		Handler: cors.AllowAll().Handler(router),
+		Handler: cors.AllowAll().Handler(r),
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
@@ -71,10 +71,29 @@ func (s *HTTPServer) StartServer(ctx context.Context) error {
 	return nil
 }
 
-func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
-	_ = r.Header.Get("Authorization")
-	// TODO token validation
+// adminRouter separate router for administrator routes
+func (s *HTTPServer) adminRouter() http.Handler {
+	r := chi.NewRouter()
+	r.Use(mw.AdminAuthMiddleware)
 
+	r.Get("/", s.GetAdminBanner)
+	r.Post("/", s.CreateBanner)
+	r.Patch("/{id}", s.UpdateBanner)
+	r.Delete("/{id}", s.DeleteBanner)
+
+	return r
+}
+
+// userRouter separate router for user routes
+func (s *HTTPServer) userRouter() http.Handler {
+	r := chi.NewRouter()
+	r.Use(mw.UserAuthMiddleware)
+	r.Get("/", s.GetUserBanner)
+
+	return r
+}
+
+func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
 	tagID, err := strconv.Atoi(r.URL.Query().Get("tag_id"))
 	if err != nil {
 		http.Error(w, "invalid tagID", http.StatusBadRequest)
@@ -131,19 +150,11 @@ func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
-	_ = r.Header.Get("Authorization")
-	// TODO token validation
-
-	var tagID int
-	tagIDStr := r.URL.Query().Get("tag_id")
-	if tagIDStr != "" {
-		var err error
-		tagID, err = strconv.Atoi(tagIDStr)
-		if err != nil {
-			http.Error(w, "invalid tagID", http.StatusBadRequest)
-			return
-		}
+	tagID, err := strconv.Atoi(r.URL.Query().Get("tag_id"))
+	if err != nil {
+		http.Error(w, "invalid tagID", http.StatusBadRequest)
 	}
+	// TODO tagID validation
 
 	var featureID int
 	featureIDStr := r.URL.Query().Get("feature_id")
@@ -212,9 +223,6 @@ func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *HTTPServer) CreateBanner(w http.ResponseWriter, r *http.Request) {
-	_ = r.Header.Get("Authorization")
-	// TODO token validation
-
 	var b *models.Banner
 	err := json.NewDecoder(r.Body).Decode(&b)
 	if err != nil {
@@ -231,9 +239,6 @@ func (s *HTTPServer) CreateBanner(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *HTTPServer) UpdateBanner(w http.ResponseWriter, r *http.Request) {
-	_ = r.Header.Get("Authorization")
-	// TODO token validation
-
 	var b *models.Banner
 	err := json.NewDecoder(r.Body).Decode(&b)
 	if err != nil {
@@ -241,8 +246,7 @@ func (s *HTTPServer) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := mux.Vars(r)
-	bannerIDStr := params["id"]
+	bannerIDStr := chi.URLParam(r, "id")
 
 	b.ID, err = strconv.Atoi(bannerIDStr)
 	if err != nil {
@@ -256,11 +260,7 @@ func (s *HTTPServer) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *HTTPServer) DeleteBanner(w http.ResponseWriter, r *http.Request) {
-	_ = r.Header.Get("Authorization")
-	// TODO token validation
-
-	params := mux.Vars(r)
-	bannerIDStr := params["id"]
+	bannerIDStr := chi.URLParam(r, "id")
 
 	bannerID, err := strconv.Atoi(bannerIDStr)
 	if err != nil {
