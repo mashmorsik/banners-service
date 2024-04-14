@@ -737,3 +737,6 @@ severity:
     - linters:
         - dupl
       severity: info
+
+  exclude-dirs:
+    - /testdata

@@ -5,11 +5,11 @@
 package mock_repository
 
 import (
-sql "database/sql"
-reflect "reflect"
+	sql "database/sql"
+	reflect "reflect"
 
-gomock "github.com/golang/mock/gomock"
-models "github.com/mashmorsik/banners-service/pkg/models"
+	gomock "github.com/golang/mock/gomock"
+	models "github.com/mashmorsik/banners-service/pkg/models"
 )
 
 // MockRepository is a mock of Repository interface.
@@ -33,6 +33,34 @@ func NewMockRepository(ctrl *gomock.Controller) *MockRepository {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
+}
+
+// AddNewFeature mocks base method.
+func (m *MockRepository) AddNewFeature(banner *models.Banner) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddNewFeature", banner)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddNewFeature indicates an expected call of AddNewFeature.
+func (mr *MockRepositoryMockRecorder) AddNewFeature(banner interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNewFeature", reflect.TypeOf((*MockRepository)(nil).AddNewFeature), banner)
+}
+
+// AddNewTag mocks base method.
+func (m *MockRepository) AddNewTag(banner *models.Banner) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddNewTag", banner)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddNewTag indicates an expected call of AddNewTag.
+func (mr *MockRepositoryMockRecorder) AddNewTag(banner interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNewTag", reflect.TypeOf((*MockRepository)(nil).AddNewTag), banner)
 }
 
 // CheckTagFeatureOverlap mocks base method.
@@ -152,10 +180,10 @@ func (mr *MockRepositoryMockRecorder) GetForAdmin(b, limit, offset interface{}) 
 }
 
 // GetForUser mocks base method.
-func (m *MockRepository) GetForUser(b *models.Banner) (*models.Content, error) {
+func (m *MockRepository) GetForUser(b *models.Banner) (*models.Banner, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetForUser", b)
-	ret0, _ := ret[0].(*models.Content)
+	ret0, _ := ret[0].(*models.Banner)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

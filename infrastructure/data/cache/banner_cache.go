@@ -20,7 +20,7 @@ type BannerCache struct {
 
 func NewBannerCache(ctx context.Context, evictionWorkerDuration time.Duration, conf *config.Config) BannerCache {
 	bc := BannerCache{Ctx: ctx, evictionWorkerDuration: evictionWorkerDuration, Config: conf}
-	bc.evictionWorker()
+	go bc.evictionWorker()
 	return bc
 }
 

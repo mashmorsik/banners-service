@@ -11,7 +11,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/logger"
-	"path/filepath"
+	"os"
 )
 
 type Data struct {
@@ -62,13 +62,16 @@ func MustMigrate(connection *sql.DB) {
 		panic(err)
 	}
 
-	absPath, err := filepath.Abs(".")
+	path, err := os.Getwd()
 	if err != nil {
 		panic(err)
 	}
 
+	migrationPath := fmt.Sprintf("file://%s/migration", path)
+	fmt.Printf("migrationPath : %s\n", migrationPath)
+
 	m, err := migrate.NewWithDatabaseInstance(
-		"file://"+absPath+"/migration",
+		migrationPath,
 		"postgres", driver)
 	if err != nil {
 		panic(err)

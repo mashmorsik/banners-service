@@ -6,7 +6,7 @@ import (
 )
 
 type Repository interface {
-	GetForUser(b *models.Banner) (*models.Content, error)
+	GetForUser(b *models.Banner) (*models.Banner, error)
 	GetForAdmin(b *models.Banner, limit, offset int) ([]*models.Banner, error)
 	CreateBanner(tx *sql.Tx, b *models.Banner) (int, error)
 	CreateContent(tx *sql.Tx, b *models.Banner) error
@@ -21,4 +21,6 @@ type Repository interface {
 	CheckTagFeatureOverlap(b *models.Banner) (int, error)
 	GetBannerActiveVersions() (map[int]int, error)
 	SetVersionActive(bannerID, version int) error
+	AddNewTag(banner *models.Banner) error
+	AddNewFeature(banner *models.Banner) error
 }

@@ -33,9 +33,9 @@ func (b *Banner) GetForUser(req *models.Banner) (*models.Content, error) {
 			return nil, errs.WithMessage(err, "banner not found")
 		}
 
-		b.Cache.Set(cacheKey, *banner)
+		b.Cache.Set(cacheKey, banner.Content)
 
-		return banner, nil
+		return &banner.Content, nil
 	}
 
 	return content, nil
@@ -47,7 +47,7 @@ func (b *Banner) GetForUserLatest(req *models.Banner) (*models.Content, error) {
 		return nil, errs.WithMessage(err, "banner not found")
 	}
 
-	return content, nil
+	return &content.Content, nil
 }
 
 func (b *Banner) GetForAdmin(req *models.Banner, limit, offset int) ([]*models.Banner, error) {

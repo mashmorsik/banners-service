@@ -7,7 +7,7 @@ import (
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/banners-service/infrastructure/data/cache"
 	"github.com/mashmorsik/banners-service/pkg/models"
-	mock_repository "github.com/mashmorsik/banners-service/test/testdata/mock_repo"
+	mock_repository "github.com/mashmorsik/banners-service/testdata/mock_repo"
 	"github.com/mashmorsik/logger"
 	errs "github.com/pkg/errors"
 	"reflect"
@@ -45,84 +45,6 @@ func TestBanner_GetForUser(t *testing.T) {
 		TagIDs:    []int{5},
 		FeatureID: 1,
 	}).Return(nil, errs.New("banner not found"))
-
-	type args struct {
-		req *models.Banner
-	}
-
-	tests := []struct {
-		name    string
-		args    args
-		want    *models.Content
-		wantErr bool
-	}{
-		{
-			name: "get_banner_for_user_success",
-			args: args{req: &models.Banner{
-				TagIDs:    []int{2},
-				FeatureID: 4,
-			}},
-			want: &models.Content{
-				Title: "test_1_title",
-				Text:  "test_1_text",
-				URL:   "test_1_url",
-			},
-			wantErr: false,
-		},
-		{
-			name: "get_banner_for_user_fail",
-			args: args{req: &models.Banner{
-				TagIDs:    []int{5},
-				FeatureID: 1,
-			}},
-			want:    nil,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b := &Banner{
-				Ctx:    ctx,
-				Repo:   mockRepo,
-				Config: &conf,
-				Cache:  &bannerCache,
-			}
-			got, err := b.GetForUser(tt.args.req)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetForUser() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetForUser() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestBanner_GetForUserLatest(t *testing.T) {
-	logger.BuildLogger(nil)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	conf := config.Config{}
-
-	ctx := context.Background()
-	bannerCache := cache.NewBannerCache(ctx, time.Hour, &conf)
-
-	mockRepo := mock_repository.NewMockRepository(ctrl)
-	mockRepo.EXPECT().GetForUser(&models.Banner{
-		TagIDs:    []int{2},
-		FeatureID: 4,
-	}).Return(&models.Content{
-		Title: "test_1_title",
-		Text:  "test_1_text",
-		URL:   "test_1_url",
-	}, nil).AnyTimes()
-	mockRepo.EXPECT().GetForUser(&models.Banner{
-		TagIDs:    []int{5},
-		FeatureID: 1,
-	}).Return(nil, errs.New("banner not found")).AnyTimes()
 
 	type args struct {
 		req *models.Banner

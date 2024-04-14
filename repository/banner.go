@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/lib/pq"
@@ -22,31 +23,31 @@ func NewBannerRepo(ctx context.Context, data *data.Data) *BannerRepo {
 	return &BannerRepo{Ctx: ctx, data: data}
 }
 
-func (br *BannerRepo) GetForUser(b *models.Banner) (*models.Content, error) {
+func (br *BannerRepo) GetForUser(b *models.Banner) (*models.Banner, error) {
 	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
 	defer cancel()
 
 	var contentJSON []byte
+	var banner models.Banner
 
 	err := br.data.Master().QueryRowContext(ctx,
-		`SELECT bc.content
+		`SELECT bc.content, bc.banner_id
 		FROM banner_content bc
 		JOIN banner b ON bc.banner_id = b.id
 		JOIN banner_feature_tag bft ON b.id = bft.banner_id
 		WHERE bft.tag_id = $1
 		AND bft.feature_id = $2
 		AND b.is_active = true
-		AND b.active_version = bc.version`, b.TagIDs[0], b.FeatureID).Scan(&contentJSON)
+		AND b.active_version = bc.version`, b.TagIDs[0], b.FeatureID).Scan(&contentJSON, &banner.ID)
 	if err != nil {
 		return nil, errs.WithMessagef(err, "failed to get banner content with bannerID %d", b.ID)
 	}
 
-	var content models.Content
-	if err = json.Unmarshal(contentJSON, &content); err != nil {
+	if err = json.Unmarshal(contentJSON, &banner.Content); err != nil {
 		return nil, errs.WithMessagef(err, "failed to unmarshal content with bannerID %d", b.ID)
 	}
 
-	return &content, nil
+	return &banner, nil
 }
 
 func (br *BannerRepo) GetForAdmin(b *models.Banner, limit, offset int) ([]*models.Banner, error) {
@@ -167,6 +168,15 @@ func (br *BannerRepo) CreateFeatureTags(tx *sql.Tx, b *models.Banner) error {
 	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
 	defer cancel()
 
+	err := br.AddNewTag(b)
+	if err != nil {
+		return errs.WithMessagef(err, "fail to add new tags")
+	}
+	err = br.AddNewFeature(b)
+	if err != nil {
+		return errs.WithMessagef(err, "fail to add new feature")
+	}
+
 	for _, tagID := range b.TagIDs {
 		_, err := tx.ExecContext(ctx,
 			`INSERT INTO banner_feature_tag(banner_id, feature_id, tag_id, version, updated_at)
@@ -262,6 +272,15 @@ func (br *BannerRepo) UpdateBannerContent(tx *sql.Tx, b *models.Banner) error {
 func (br *BannerRepo) UpdateFeatureTag(tx *sql.Tx, b *models.Banner) error {
 	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
 	defer cancel()
+
+	err := br.AddNewTag(b)
+	if err != nil {
+		return errs.WithMessagef(err, "fail to add new tags")
+	}
+	err = br.AddNewFeature(b)
+	if err != nil {
+		return errs.WithMessagef(err, "fail to add new feature")
+	}
 
 	for _, tagID := range b.TagIDs {
 		_, err := tx.ExecContext(ctx,
@@ -497,6 +516,56 @@ func (br *BannerRepo) SetVersionActive(bannerID, version int) error {
 		WHERE id = $2`, version, bannerID)
 	if err != nil {
 		return errs.WithMessagef(err, "fail to set active version for banner %d", bannerID)
+	}
+
+	return nil
+}
+
+func (br *BannerRepo) AddNewTag(banner *models.Banner) error {
+	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
+	defer cancel()
+
+	for _, tagID := range banner.TagIDs {
+		var count int
+		err := br.data.Master().QueryRowContext(ctx,
+			`SELECT COUNT(*) 
+			FROM tag
+			WHERE id = $1`, tagID).Scan(&count)
+		if err != nil {
+			return errs.WithMessagef(err, "failed to check tag existence for ID %d", tagID)
+		}
+		if count == 0 {
+			_, err = br.data.Master().ExecContext(ctx,
+				`INSERT INTO tag (id, name) 
+				VALUES ($1, $2)`, tagID, strconv.Itoa(tagID))
+			if err != nil {
+				return errs.WithMessagef(err, "failed to add new tag with ID %d", tagID)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (br *BannerRepo) AddNewFeature(banner *models.Banner) error {
+	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
+	defer cancel()
+
+	var count int
+	err := br.data.Master().QueryRowContext(ctx,
+		`SELECT COUNT(*) 
+		FROM feature
+		WHERE id = $1`, banner.FeatureID).Scan(&count)
+	if err != nil {
+		return errs.WithMessagef(err, "failed to check feature existence for ID %d", banner.FeatureID)
+	}
+	if count == 0 {
+		_, err = br.data.Master().ExecContext(ctx,
+			`INSERT INTO feature (id, name) 
+			VALUES ($1, $2)`, banner.FeatureID, strconv.Itoa(banner.FeatureID))
+		if err != nil {
+			return errs.WithMessagef(err, "failed to add new feature with ID %d", banner.FeatureID)
+		}
 	}
 
 	return nil

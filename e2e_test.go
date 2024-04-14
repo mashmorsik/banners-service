@@ -1,4 +1,4 @@
-package banners_service
+package banners_service_test
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/banners-service/infrastructure/data"
 	"github.com/mashmorsik/banners-service/infrastructure/data/cache"
-	"github.com/mashmorsik/banners-service/infrastructure/server"
 	"github.com/mashmorsik/banners-service/internal/banner"
 	"github.com/mashmorsik/banners-service/pkg/models"
 	"github.com/mashmorsik/banners-service/pkg/token"
@@ -29,110 +28,128 @@ func Test_GetUserBanner(t *testing.T) {
 		return
 	}
 
+	conf.Postgres.Host = "localhost"
+	path := "http://localhost"
+
 	ctx := context.Background()
 
 	conn := data.MustConnectPostgres(ctx, conf)
 	data.MustMigrate(conn)
+
 	dat := data.NewData(ctx, conn)
 
 	bannerCache := cache.NewBannerCache(ctx, conf.Cache.EvictionWorkerDuration, conf)
+
 	bannerRepo := repository.NewBannerRepo(ctx, dat)
-	bb := banner.NewBanner(ctx, bannerRepo, conf, &bannerCache)
+	_ = banner.NewBanner(ctx, bannerRepo, conf, &bannerCache)
 
 	token.NewTokenManager(conf.Auth.TokenSecret)
 
-	go func() {
-		httpServer := server.NewServer(conf, *bb)
-		if err = httpServer.StartServer(ctx); err != nil {
-			logger.Warn(err.Error())
-		}
-	}()
-
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// get an admin token
-	getAdminToken := fmt.Sprintf("http://localhost%s/token?role=admin", conf.Server.Port)
-	resp, err := http.Get(getAdminToken)
+	getAdminToken := fmt.Sprintf("%s%s/token?role=admin", path, conf.Server.Port)
+	adminTokenResp, err := http.Get(getAdminToken)
 	if err != nil {
 		t.Errorf("Error sending GET request: %v", err)
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err = Body.Close()
-		if err != nil {
-			return
-		}
-	}(resp.Body)
+	defer adminTokenResp.Body.Close()
 
-	adminToken, err := io.ReadAll(resp.Body)
+	adminToken, err := io.ReadAll(adminTokenResp.Body)
 	if err != nil {
 		t.Errorf("Error reading response body: %v", err)
 	}
 
-	// create a new active banner with TagIDs 9, 10 and FeatureID 3
-	newBanner := models.Banner{
-		ID:        0,
-		TagIDs:    []int{9, 10},
-		FeatureID: 3,
+	// create a new active banner
+	newBanner := &models.Banner{
+		TagIDs:    []int{70, 71},
+		FeatureID: 70,
 		IsActive:  true,
 		Content: models.Content{
 			Title: "New_super_banner",
 			Text:  "Super_description",
 			URL:   "Mega_super_URL",
 		},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	postDataJSON, err := json.Marshal(newBanner)
 	if err != nil {
-		t.Errorf("Error marshalling banner: %v", err)
+		t.Errorf("Error marshaling banner: %v", err)
 	}
 
 	reqBody := bytes.NewBuffer(postDataJSON)
 
-	req, err := http.Post("http://localhost"+conf.Server.Port+"/banner", "application/json", reqBody)
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", path+conf.Server.Port+"/banner", reqBody)
 	if err != nil {
-		t.Errorf("Error sending POST request: %v", err)
+		fmt.Println(err)
+		return
 	}
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+string(adminToken))
 
-	req.Header.Set("Authorization", "Bearer "+string(adminToken))
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer resp.Body.Close()
 
 	// get a user token
-	getUserToken := fmt.Sprintf("http://localhost%s/token?role=admin", conf.Server.Port)
-	resp, err = http.Get(getUserToken)
+	getUserToken := fmt.Sprintf("%s%s/token?role=user", path, conf.Server.Port)
+	userTokenResp, err := http.Get(getUserToken)
 	if err != nil {
 		t.Errorf("Error sending GET request: %v", err)
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err = Body.Close()
-		if err != nil {
-			return
-		}
-	}(resp.Body)
+	defer userTokenResp.Body.Close()
 
-	userToken, err := io.ReadAll(resp.Body)
+	userToken, err := io.ReadAll(userTokenResp.Body)
 	if err != nil {
 		t.Errorf("Error reading response body: %v", err)
 	}
 
 	// get a banner for the user
-	req, err = http.Post("http://localhost"+conf.Server.Port+"/user_banner?tag_id=10&feature_id=3", "application/json", reqBody)
+	clientUser := &http.Client{}
+	userBannerReq, err := http.NewRequest("GET",
+		path+conf.Server.Port+"/user_banner?tag_id=70&feature_id=70", nil)
 	if err != nil {
-		t.Errorf("Error sending POST request: %v", err)
+		logger.Errf(err.Error(), "Error sending GET request: %v", err)
+		return
 	}
+	userBannerReq.Header.Add("Content-Type", "application/json")
+	userBannerReq.Header.Add("Authorization", "Bearer "+string(userToken))
 
-	req.Header.Set("Authorization", "Bearer "+string(userToken))
+	userBannerResp, err := clientUser.Do(userBannerReq)
+	if err != nil {
+		logger.Errf(err.Error(), "Error sending GET request: %v", err)
+		return
+	}
+	defer resp.Body.Close()
 
-	var userBanner models.Content
-	err = json.NewDecoder(resp.Body).Decode(&userBanner)
+	var userBanner *models.Content
+	err = json.NewDecoder(userBannerResp.Body).Decode(&userBanner)
 	if err != nil {
 		t.Errorf("Error decoding response body: %v", err)
 	}
 
 	// compare the content
-	if newBanner.Content != userBanner {
+	if newBanner.Content != *userBanner {
 		t.Errorf("GetUserBanner failed: expected %v, got %v", newBanner.Content, userBanner)
 	}
+
+	// delete newBanner
+	defer func() {
+		bannerDelete, err := bannerRepo.GetForUser(newBanner)
+		if err != nil {
+			return
+		}
+
+		err = bannerRepo.Delete(bannerDelete.ID)
+		if err != nil {
+			logger.Errf(err.Error(), "Error sending DELETE request: %v", err)
+			return
+		}
+	}()
 }

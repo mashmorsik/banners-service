@@ -1,12 +1,12 @@
 create table if not exists public.tag
 (
-    id serial primary key,
+    id integer primary key,
     name text not null
 );
 
 create table if not exists public.feature
 (
-    id serial primary key,
+    id integer primary key,
     name text not null
 );
 

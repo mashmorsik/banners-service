@@ -11,7 +11,7 @@ RUN apk update && \
 # make wait-for-postgres.sh executable
 RUN chmod +x wait-for-postgres.sh
 
-RUN go build -o app ./cmd/quotation/main.go
+RUN go build -o app ./cmd/banner/main.go
 
 EXPOSE 8080
 EXPOSE 8082
