@@ -12,7 +12,7 @@ import (
 )
 
 type (
-	BannerApiClaims struct {
+	BannerAPIClaims struct {
 		Roles   []Role `json:"roles,omitempty"`
 		Comment string `json:"comment,omitempty"`
 
@@ -49,7 +49,7 @@ func Create(r Role) (string, error) {
 	}
 
 	tokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
-		BannerApiClaims{
+		BannerAPIClaims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer:    "ca.banners-service",
 				Subject:   string(r),

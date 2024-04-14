@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
+
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/banners-service/infrastructure/data/cache"
 	"github.com/mashmorsik/banners-service/pkg/models"
 	"github.com/mashmorsik/banners-service/repository"
 	errs "github.com/pkg/errors"
-	"strconv"
 )
 
 type Banner struct {
@@ -55,12 +56,7 @@ func (b *Banner) GetForAdmin(req *models.Banner, limit, offset int) ([]*models.B
 		return nil, errs.WithMessage(err, "banners not found")
 	}
 
-	merged, err := b.mergeBannerTags(banners)
-	if err != nil {
-		return nil, errs.WithMessage(err, "fail to merge banner tags")
-	}
-
-	updatedIsActive, err := b.updateBannerIsActive(merged)
+	updatedIsActive, err := b.updateBannerIsActive(b.mergeBannerTags(banners))
 	if err != nil {
 		return nil, errs.WithMessage(err, "fail to update banner is active")
 	}
@@ -118,7 +114,7 @@ func (b *Banner) SetVersionActive(bannerID, version int) error {
 	return nil
 }
 
-func (b *Banner) mergeBannerTags(banners []*models.Banner) ([]*models.Banner, error) {
+func (b *Banner) mergeBannerTags(banners []*models.Banner) []*models.Banner {
 	mergedBanners := make(map[string]*models.Banner)
 	for _, banner := range banners {
 		key := fmt.Sprintf("%d_%d_%d", banner.ID, banner.Version, banner.FeatureID)
@@ -134,7 +130,7 @@ func (b *Banner) mergeBannerTags(banners []*models.Banner) ([]*models.Banner, er
 		mergedBannersList = append(mergedBannersList, banner)
 	}
 
-	return mergedBannersList, nil
+	return mergedBannersList
 }
 
 func (b *Banner) updateBannerIsActive(banners []*models.Banner) ([]*models.Banner, error) {

@@ -62,7 +62,10 @@ func MustMigrate(connection *sql.DB) {
 		panic(err)
 	}
 
-	absPath, _ := filepath.Abs(".")
+	absPath, err := filepath.Abs(".")
+	if err != nil {
+		panic(err)
+	}
 
 	m, err := migrate.NewWithDatabaseInstance(
 		"file://"+absPath+"/migration",
