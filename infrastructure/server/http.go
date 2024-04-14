@@ -50,8 +50,9 @@ func (s *HTTPServer) StartServer(ctx context.Context) error {
 	}, nil))
 
 	httpServer := &http.Server{
-		Addr:    s.Config.Server.Port,
-		Handler: cors.AllowAll().Handler(r),
+		Addr:              s.Config.Server.Port,
+		Handler:           cors.AllowAll().Handler(r),
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)

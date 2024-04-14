@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
+
 	"github.com/lib/pq"
 	"github.com/mashmorsik/banners-service/infrastructure/data"
 	"github.com/mashmorsik/banners-service/pkg/models"
 	"github.com/mashmorsik/logger"
 	errs "github.com/pkg/errors"
-	"time"
 )
 
 type BannerRepo struct {
@@ -91,6 +92,10 @@ func (br *BannerRepo) GetForAdmin(b *models.Banner, limit, offset int) ([]*model
 			return
 		}
 	}(rows)
+
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var banner models.Banner
@@ -326,6 +331,12 @@ func (br *BannerRepo) MergeUpdateVersion(tx *sql.Tx, b *models.Banner, lastVersi
 		}
 	}(rows)
 
+	defer func() { _ = rows.Close() }()
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
 	for rows.Next() {
 		var tagID int
 		if err = rows.Scan(&tagID); err != nil {
@@ -456,6 +467,12 @@ func (br *BannerRepo) GetBannerActiveVersions() (map[int]int, error) {
 			return
 		}
 	}(rows)
+
+	defer func() { _ = rows.Close() }()
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
 
 	for rows.Next() {
 		var id int
