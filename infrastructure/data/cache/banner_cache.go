@@ -2,11 +2,12 @@ package cache
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/banners-service/pkg/models"
 	"github.com/mashmorsik/logger"
-	"sync"
-	"time"
 )
 
 var cache sync.Map
@@ -18,7 +19,9 @@ type BannerCache struct {
 }
 
 func NewBannerCache(ctx context.Context, evictionWorkerDuration time.Duration, conf *config.Config) BannerCache {
-	return BannerCache{Ctx: ctx, evictionWorkerDuration: evictionWorkerDuration, Config: conf}
+	bc := BannerCache{Ctx: ctx, evictionWorkerDuration: evictionWorkerDuration, Config: conf}
+	bc.evictionWorker()
+	return bc
 }
 
 type Item struct {

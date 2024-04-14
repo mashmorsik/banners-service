@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 	"github.com/mashmorsik/banners-service/config"
 	"github.com/mashmorsik/logger"
-	"os"
 )
 
 type Data struct {
@@ -68,7 +69,7 @@ func MustMigrate(connection *sql.DB) {
 	}
 
 	migrationPath := fmt.Sprintf("file://%s/migration", path)
-	fmt.Printf("migrationPath : %s\n", migrationPath)
+	logger.Infof("migrationPath : %s\n", migrationPath)
 
 	m, err := migrate.NewWithDatabaseInstance(
 		migrationPath,
