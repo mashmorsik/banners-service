@@ -19,4 +19,6 @@ type Repository interface {
 	Update(b *models.Banner) error
 	Delete(bannerID int) error
 	CheckTagFeatureOverlap(b *models.Banner) (int, error)
+	GetBannerActiveVersions() (map[int]int, error)
+	SetVersionActive(bannerID, version int) error
 }

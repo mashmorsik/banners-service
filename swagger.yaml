@@ -1,0 +1,610 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Banner Service",
+    "version": "3.0.0",
+    "description": "API for managing banners"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/token": {
+      "get": {
+        "summary": "Generate a token for the specified role.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["admin", "user"],
+              "description": "The role for which the token is generated."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "The generated token."
+                },
+                "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4ifQ=="
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_banner": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get banner for the user",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "User tag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "feature_id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Feature identifier"
+            }
+          },
+          {
+            "in": "query",
+            "name": "use_last_revision",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "description": "Get the latest information"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User banner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "JSON representation of the banner",
+                  "type": "object",
+                  "additionalProperties": true,
+                  "example": "{\"title\": \"some_title\", \"text\": \"some_text\", \"url\": \"some_url\"}"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User not authorized"
+          },
+          "403": {
+            "description": "User does not have access"
+          },
+          "404": {
+            "description": "Banner not found"
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/banner": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get all banners with filtering by feature and/or tag",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "feature_id",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Feature identifier"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag_id",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Tag identifier"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "banner_id": {
+                        "type": "integer",
+                        "description": "Banner identifier"
+                      },
+                      "tag_ids": {
+                        "type": "array",
+                        "description": "Tag identifiers",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "feature_id": {
+                        "type": "integer",
+                        "description": "Feature identifier"
+                      },
+                      "content": {
+                        "type": "object",
+                        "description": "Banner content",
+                        "additionalProperties": true,
+                        "example": "{\"title\": \"some_title\", \"text\": \"some_text\", \"url\": \"some_url\"}"
+                      },
+                      "is_active": {
+                        "type": "boolean",
+                        "description": "Banner activity flag"
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Banner creation date"
+                      },
+                      "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Banner update date"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User not authorized"
+          },
+          "403": {
+            "description": "User does not have access"
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a new banner",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tag_ids": {
+                    "type": "array",
+                    "description": "Tag identifiers",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "feature_id": {
+                    "type": "integer",
+                    "description": "Feature identifier"
+                  },
+                  "content": {
+                    "type": "object",
+                    "description": "Banner content",
+                    "additionalProperties": true,
+                    "example": "{\"title\": \"some_title\", \"text\": \"some_text\", \"url\": \"some_url\"}"
+                  },
+                  "is_active": {
+                    "type": "boolean",
+                    "description": "Banner activity flag"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "banner_id": {
+                      "type": "integer",
+                      "description": "Created banner identifier"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User not authorized"
+          },
+          "403": {
+            "description": "User does not have access"
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/banner/{id}": {
+      "patch": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update banner content",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Banner identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tag_ids": {
+                    "nullable": true,
+                    "type": "array",
+                    "description": "Tag identifiers",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "feature_id": {
+                    "nullable": true,
+                    "type": "integer",
+                    "description": "Feature identifier"
+                  },
+                  "content": {
+                    "nullable": true,
+                    "type": "object",
+                    "description": "Banner content",
+                    "additionalProperties": true,
+                    "example": "{\"title\": \"some_title\", \"text\": \"some_text\", \"url\": \"some_url\"}"
+                  },
+                  "is_active": {
+                    "nullable": true,
+                    "type": "boolean",
+                    "description": "Banner activity flag"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Invalid data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User not authorized"
+          },
+          "403": {
+            "description": "User does not have access"
+          },
+          "404": {
+            "description": "Banner not found"
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete banner by identifier",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Banner identifier"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Banner successfully deleted"
+          },
+          "400": {
+            "description": "Invalid data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User not authorized"
+          },
+          "403": {
+            "description": "User does not have access"
+          },
+          "404": {
+            "description": "Banner for the tag not found"
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/banner/{id}/{v}": {
+      "patch": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update the active version of a banner.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "The ID of the banner."
+            }
+          },
+          {
+            "in": "path",
+            "name": "v",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "The version number to set as active."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

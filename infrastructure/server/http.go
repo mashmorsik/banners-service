@@ -44,7 +44,6 @@ func (s *HTTPServer) StartServer(ctx context.Context) error {
 	r.Mount("/user_banner", s.userRouter())
 
 	r.Handle("/swagger.yaml", http.FileServer(http.Dir("./")))
-
 	r.Handle("/swagger", middleware.SwaggerUI(middleware.SwaggerUIOpts{
 		Path:    "/swagger",
 		SpecURL: "swagger.yaml",
@@ -76,9 +75,11 @@ func (s *HTTPServer) adminRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Use(mw.AdminAuthMiddleware)
 
+	// GetAdminBanner returns all versions of banners with set params, it also shows which version is active now
 	r.Get("/", s.GetAdminBanner)
 	r.Post("/", s.CreateBanner)
 	r.Patch("/{id}", s.UpdateBanner)
+	r.Patch("/{id}/{v}", s.UpdateActiveVersion)
 	r.Delete("/{id}", s.DeleteBanner)
 
 	return r
@@ -98,13 +99,11 @@ func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid tagID", http.StatusBadRequest)
 	}
-	// TODO tagID validation
 
 	featureID, err := strconv.Atoi(r.URL.Query().Get("feature_id"))
 	if err != nil {
 		http.Error(w, "invalid featureID", http.StatusBadRequest)
 	}
-	// TODO featureID validation
 
 	useLatest := false
 	lastRevision := r.URL.Query().Get("use_last_revision")
@@ -116,7 +115,6 @@ func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
 		TagIDs:    append([]int{}, tagID),
 		FeatureID: featureID,
 		IsActive:  true,
-		Latest:    useLatest,
 	}
 
 	var respBanner *models.Content
@@ -150,15 +148,20 @@ func (s *HTTPServer) GetUserBanner(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
-	tagID, err := strconv.Atoi(r.URL.Query().Get("tag_id"))
-	if err != nil {
-		http.Error(w, "invalid tagID", http.StatusBadRequest)
+	var tagID int
+	tagIDStr := r.URL.Query().Get("tag_id")
+	if tagIDStr != "" {
+		var err error
+		tagID, err = strconv.Atoi(tagIDStr)
+		if err != nil {
+			http.Error(w, "invalid featureID", http.StatusBadRequest)
+			return
+		}
 	}
-	// TODO tagID validation
 
 	var featureID int
 	featureIDStr := r.URL.Query().Get("feature_id")
-	if tagIDStr != "" {
+	if featureIDStr != "" {
 		var err error
 		featureID, err = strconv.Atoi(featureIDStr)
 		if err != nil {
@@ -182,11 +185,11 @@ func (s *HTTPServer) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 
 	var offset int
 	offsetStr := r.URL.Query().Get("offset")
-	if limitStr != "" {
+	if offsetStr != "" {
 		var err error
 		offset, err = strconv.Atoi(offsetStr)
 		if err != nil {
-			http.Error(w, "invalid limit", http.StatusBadRequest)
+			http.Error(w, "invalid offset", http.StatusBadRequest)
 			return
 		}
 	} else {
@@ -259,6 +262,26 @@ func (s *HTTPServer) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *HTTPServer) UpdateActiveVersion(w http.ResponseWriter, r *http.Request) {
+	bannerIDStr := chi.URLParam(r, "id")
+
+	bannerID, err := strconv.Atoi(bannerIDStr)
+	if err != nil {
+		http.Error(w, "invalid bannerID", http.StatusBadRequest)
+	}
+
+	versionStr := chi.URLParam(r, "v")
+	version, err := strconv.Atoi(versionStr)
+	if err != nil {
+		http.Error(w, "invalid bannerID", http.StatusBadRequest)
+	}
+
+	err = s.Banners.SetVersionActive(bannerID, version)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+}
+
 func (s *HTTPServer) DeleteBanner(w http.ResponseWriter, r *http.Request) {
 	bannerIDStr := chi.URLParam(r, "id")
 
@@ -266,7 +289,6 @@ func (s *HTTPServer) DeleteBanner(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid bannerID", http.StatusBadRequest)
 	}
-	// TODO tagID validation
 
 	err = s.Banners.Delete(bannerID)
 	if err != nil {

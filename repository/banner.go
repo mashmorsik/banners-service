@@ -51,48 +51,37 @@ func (br *BannerRepo) GetForUser(b *models.Banner) (*models.Content, error) {
 func (br *BannerRepo) GetForAdmin(b *models.Banner, limit, offset int) ([]*models.Banner, error) {
 	var banners []*models.Banner
 
-	tagID := b.TagIDs[0]
-	featureID := b.FeatureID
-
-	var queryLimit, queryOffset interface{}
+	var queryLimit, queryOffset, queryTag, queryFeature interface{}
 	if limit != 0 {
 		queryLimit = limit
 	}
 	if offset != 0 {
 		queryOffset = offset
 	}
+	if b.TagIDs[0] != 0 {
+		queryTag = b.TagIDs[0]
+	}
+	if b.FeatureID != 0 {
+		queryFeature = b.FeatureID
+	}
 
 	rows, err := br.data.Master().QueryContext(br.Ctx, `
         SELECT
-            b.id,
-            b.created_at,
-            b.updated_at,
-            array_agg(bft.tag_id) AS tag_ids,
-            bft.feature_id,
-            b.is_active,
-            bc.content,
-            bc.version
-        FROM
-            banner b
-        JOIN
-            banner_content bc ON b.id = bc.banner_id
-        JOIN
-            banner_feature_tag bft ON b.id = bft.banner_id
-        WHERE
-            (bft.feature_id = $1 OR $1 IS NULL)
-            AND (bft.tag_id = $2 OR $2 IS NULL)
-        GROUP BY
-            b.id,
-            b.created_at,
-            b.updated_at,
-            bft.feature_id,
-            b.is_active,
-            bc.content,
-            bc.version
-        ORDER BY
-            b.id
-        LIMIT $3 OFFSET $4;
-    `, featureID, tagID, queryLimit, queryOffset)
+    b.id,
+	bft.version,
+    b.created_at,
+    b.updated_at,
+    bft.tag_id,
+    bft.feature_id,
+    bc.content
+	FROM banner b
+         JOIN banner_content bc ON b.id = bc.banner_id
+         JOIN banner_feature_tag bft ON b.id = bft.banner_id
+	WHERE bc.version = bft.version 
+	AND (bft.feature_id = $1 OR $1 IS NULL)
+    AND (tag_id = $2 OR $2 IS NULL)
+    LIMIT $3 OFFSET $4;
+    `, queryFeature, queryTag, queryLimit, queryOffset)
 	if err != nil {
 		return nil, err
 	}
@@ -106,12 +95,14 @@ func (br *BannerRepo) GetForAdmin(b *models.Banner, limit, offset int) ([]*model
 	for rows.Next() {
 		var banner models.Banner
 		var contentJSON []byte
-		if err = rows.Scan(&banner.ID, &banner.CreatedAt, &banner.UpdatedAt, pq.Array(&banner.TagIDs), &banner.FeatureID, &banner.IsActive, &contentJSON, &banner.Version); err != nil {
+		var tag int
+		if err = rows.Scan(&banner.ID, &banner.Version, &banner.CreatedAt, &banner.UpdatedAt, &tag, &banner.FeatureID, &contentJSON); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal(contentJSON, &banner.Content); err != nil {
 			return nil, err
 		}
+		banner.TagIDs = append(banner.TagIDs, tag)
 		banners = append(banners, &banner)
 	}
 	if err = rows.Err(); err != nil {
@@ -445,4 +436,51 @@ func (br *BannerRepo) CheckTagFeatureOverlap(b *models.Banner) (int, error) {
 	}
 
 	return bannerID, nil
+}
+
+func (br *BannerRepo) GetBannerActiveVersions() (map[int]int, error) {
+	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
+	defer cancel()
+
+	activeVersions := make(map[int]int)
+
+	rows, err := br.data.Master().QueryContext(ctx,
+		`SELECT id, banner.active_version
+		FROM banner`)
+	if err != nil {
+		return activeVersions, errs.WithMessagef(err, "fail to get active versions")
+	}
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			return
+		}
+	}(rows)
+
+	for rows.Next() {
+		var id int
+		var version int
+		err = rows.Scan(&id, &version)
+		if err != nil {
+			return activeVersions, errs.WithMessagef(err, "fail to scan row")
+		}
+		activeVersions[id] = version
+	}
+
+	return activeVersions, nil
+}
+
+func (br *BannerRepo) SetVersionActive(bannerID, version int) error {
+	ctx, cancel := context.WithTimeout(br.Ctx, time.Second*5)
+	defer cancel()
+
+	_, err := br.data.Master().ExecContext(ctx,
+		`UPDATE banner
+		SET is_active = true, active_version = $1
+		WHERE id = $2`, version, bannerID)
+	if err != nil {
+		return errs.WithMessagef(err, "fail to set active version for banner %d", bannerID)
+	}
+
+	return nil
 }
