@@ -68,7 +68,6 @@ func MustMigrate(connection *sql.DB) {
 	}
 
 	migrationPath := fmt.Sprintf("file://%s/migration", path)
-	fmt.Printf("migrationPath : %s\n", migrationPath)
 
 	m, err := migrate.NewWithDatabaseInstance(
 		migrationPath,

@@ -81,9 +81,9 @@ func Test_GetUserBanner(t *testing.T) {
 	reqBody := bytes.NewBuffer(postDataJSON)
 
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", path+conf.Server.Port+"/banner", reqBody)
+	req, err := http.NewRequestWithContext(ctx, "POST", path+conf.Server.Port+"/banner", reqBody)
 	if err != nil {
-		fmt.Println(err)
+		logger.Errf("Error sending POST request: %v", err)
 		return
 	}
 	req.Header.Add("Content-Type", "application/json")
@@ -91,7 +91,7 @@ func Test_GetUserBanner(t *testing.T) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println(err)
+		logger.Errf("Error sending POST request: %v", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -112,7 +112,7 @@ func Test_GetUserBanner(t *testing.T) {
 
 	// get a banner for the user
 	clientUser := &http.Client{}
-	userBannerReq, err := http.NewRequest("GET",
+	userBannerReq, err := http.NewRequestWithContext(ctx, "GET",
 		path+conf.Server.Port+"/user_banner?tag_id=70&feature_id=70", nil)
 	if err != nil {
 		logger.Errf(err.Error(), "Error sending GET request: %v", err)
@@ -126,7 +126,7 @@ func Test_GetUserBanner(t *testing.T) {
 		logger.Errf(err.Error(), "Error sending GET request: %v", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer userBannerResp.Body.Close()
 
 	var userBanner *models.Content
 	err = json.NewDecoder(userBannerResp.Body).Decode(&userBanner)
